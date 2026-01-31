@@ -99,7 +99,7 @@ jobs:
       - name: Setup SSH for EC2
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H ${{ secrets.EC2_PUBLIC_DNS }} >> ~/.ssh/known_hosts || true
 
@@ -108,7 +108,7 @@ jobs:
         with:
           host: ${{ secrets.PUPPET_AGENT_HOST }}
           username: ${{ secrets.PUPPET_AGENT_USER }}          # e.g. ec2-user, ubuntu
-          key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             set -euo pipefail
 
