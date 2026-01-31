@@ -1,3 +1,6 @@
+classes:
+  - dynatraceoneagent
+
 # General Dynatrace OneAgent settings (non-sensitive)
 dynatraceoneagent::ensure: 'present'
 dynatraceoneagent::version: 'latest'                # or specific e.g. '1.279.134.20250101-123456'
