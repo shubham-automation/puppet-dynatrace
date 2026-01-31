@@ -115,6 +115,7 @@ jobs:
             # Prepare Puppet directories (adjust paths if your setup differs)
             sudo mkdir -p /etc/puppetlabs/code/environments/production/{data,secrets,manifests}
 
+            ls -lrt
             # Copy hiera.yaml
             sudo cp ./hiera.yaml /etc/puppetlabs/puppet/hiera.yaml || \
             sudo cp ./hiera.yaml /etc/puppetlabs/code/environments/production/hiera.yaml
