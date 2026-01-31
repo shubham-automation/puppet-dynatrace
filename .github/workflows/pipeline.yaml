@@ -156,6 +156,18 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Debug - List repo root contents
+        run: ls -la .
+  
+      - name: Debug - List data/ contents
+        run: ls -la data/ || echo "data/ folder missing!"
+  
+      - name: Debug - List manifests/ contents
+        run: ls -la manifests/ || echo "manifests/ folder missing!"
+  
+      - name: Debug - Show hiera.yaml if present
+        run: cat hiera.yaml || echo "hiera.yaml not found"
+     
       - name: Setup SSH key
         run: |
           mkdir -p ~/.ssh
@@ -164,18 +176,20 @@ jobs:
           ssh-keyscan -H ${{ secrets.PUPPET_AGENT_HOST }} >> ~/.ssh/known_hosts || true
 
       - name: Copy Hiera files + data to EC2 (temporary location)
-        uses: appleboy/scp-action@v0.1.7   # stable & widely used version as of 2026
+        uses: appleboy/scp-action@v0.1.7
         with:
-          host: ${{ secrets.PUPPET_AGENT_HOST }}
-          username: ${{ secrets.PUPPET_AGENT_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: 22
-          source: |
-            hiera.yaml
-            data/
-            manifests/
-          target: "/tmp/gh-puppet-deploy"
-          strip_components: 0
+           host: ${{ secrets.PUPPET_AGENT_HOST }}
+           username: ${{ secrets.PUPPET_AGENT_USER }}
+           key: ${{ secrets.SSH_PRIVATE_KEY }}
+           port: 22
+           debug: true                  # ← turns on verbose logging in the action
+           source: |
+             hiera.yaml
+             data
+             manifests
+           target: "/tmp/gh-puppet-deploy"
+           strip_components: 0
+           rm: false                    # don't rm source on runner
 
       - name: Debug — check copied files on remote
         uses: appleboy/ssh-action@v1.0.3
