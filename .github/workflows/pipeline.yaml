@@ -173,13 +173,13 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -H ${{ secrets.PUPPET_AGENT_HOST }} >> ~/.ssh/known_hosts || true
+          ssh-keyscan -H ${{ secrets.PUPPET_SERVER_HOST }} >> ~/.ssh/known_hosts || true
 
       - name: Copy Hiera files + data to EC2 (temporary location)
         uses: appleboy/scp-action@v0.1.7
         with:
-          host: ${{ secrets.PUPPET_AGENT_HOST }}
-          username: ${{ secrets.PUPPET_AGENT_USER }}
+          host: ${{ secrets.PUPPET_SERVER_HOST }}
+          username: ${{ secrets.PUPPET_SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
           debug: true                     # keep for now – shows more
@@ -191,16 +191,16 @@ jobs:
       - name: Debug — check copied files on remote
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.PUPPET_AGENT_HOST }}
-          username: ${{ secrets.PUPPET_AGENT_USER }}
+          host: ${{ secrets.PUPPET_SERVER_HOST }}
+          username: ${{ secrets.PUPPET_SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: ls -laR /tmp/gh-puppet-deploy
     
       - name: Move files to Puppet locations + inject secrets + run agent
         uses: appleboy/ssh-action@v1.0.3   # your original version – still fine
         with:
-          host: ${{ secrets.PUPPET_AGENT_HOST }}
-          username: ${{ secrets.PUPPET_AGENT_USER }}
+          host: ${{ secrets.PUPPET_SERVER_HOST }}
+          username: ${{ secrets.PUPPET_SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             set -euo pipefail
