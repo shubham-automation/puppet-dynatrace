@@ -178,18 +178,15 @@ jobs:
       - name: Copy Hiera files + data to EC2 (temporary location)
         uses: appleboy/scp-action@v0.1.7
         with:
-           host: ${{ secrets.PUPPET_AGENT_HOST }}
-           username: ${{ secrets.PUPPET_AGENT_USER }}
-           key: ${{ secrets.SSH_PRIVATE_KEY }}
-           port: 22
-           debug: true                  # ← turns on verbose logging in the action
-           source: |
-             hiera.yaml
-             data
-             manifests
-           target: "/tmp/gh-puppet-deploy"
-           strip_components: 0
-           rm: false                    # don't rm source on runner
+          host: ${{ secrets.PUPPET_AGENT_HOST }}
+          username: ${{ secrets.PUPPET_AGENT_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          debug: true                     # keep for now – shows more
+          source: "."                     # ← copy everything in repo root
+          target: "/tmp/gh-puppet-deploy"
+          strip_components: 0
+          rm: false
 
       - name: Debug — check copied files on remote
         uses: appleboy/ssh-action@v1.0.3
