@@ -224,10 +224,10 @@ jobs:
             set -euo pipefail
 
             # Ensure full Puppet path
-            export PATH=/opt/puppetlabs/bin:$PATH
+            #export PATH=/opt/puppetlabs/bin:$PATH
 
             # Optional: ensure correct server is set
-            sudo /opt/puppetlabs/bin/puppet config set server ${{ secrets.PUPPET_MASTER_HOST }} --section main
+            #sudo puppet config set server ${{ secrets.PUPPET_MASTER_HOST }} --section main
 
             # Run agent
-            sudo /opt/puppetlabs/bin/puppet agent --test --verbose --environment production --waitforcert 60 || echo "Puppet agent exit code: \$?"
+            sudo puppet agent --test --verbose --environment production --waitforcert 60 || echo "Puppet agent exit code: \$?"
