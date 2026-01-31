@@ -1,0 +1,18 @@
+# General Dynatrace OneAgent settings (non-sensitive)
+dynatraceoneagent::ensure: 'present'
+dynatraceoneagent::version: 'latest'                # or specific e.g. '1.279.134.20250101-123456'
+dynatraceoneagent::install_method: 'paas'
+
+# Common install flags (adjust to match your module's parameter name)
+dynatraceoneagent::oneagent_params_hash:
+  '--set-infra-only': 'false'
+  '--set-app-log-content-access': 'true'
+  '--set-host-group': 'aws-prod-group'
+  '--set-host-property': 'deployed_via=github-actions'
+  '--set-host-property': 'environment=production'
+
+# If your module uses array style instead:
+# dynatraceoneagent::oneagent_params_array:
+#   - 'INFRA_ONLY=0'
+#   - 'APP_LOG_CONTENT_ACCESS=1'
+#   - 'HOST_GROUP=aws-prod-group'
