@@ -137,7 +137,7 @@
 #             sudo puppet agent --test --verbose || echo "Puppet run exit code: \$?"
 
 
-name: Deploy Dynatrace OneAgent via Puppet (Hiera in repo)
+name: Deploy Dynatrace OneAgent via Puppet (Master + Agent)
 
 on:
   workflow_dispatch:
@@ -156,83 +156,78 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Debug - List repo root contents
-        run: ls -la .
-  
-      - name: Debug - List data/ contents
-        run: ls -la data/ || echo "data/ folder missing!"
-  
-      - name: Debug - List manifests/ contents
-        run: ls -la manifests/ || echo "manifests/ folder missing!"
-  
-      - name: Debug - Show hiera.yaml if present
-        run: cat hiera.yaml || echo "hiera.yaml not found"
-     
-      - name: Setup SSH key
+      - name: Debug repo contents
+        run: |
+          ls -la .
+          ls -la data/ || echo "data/ missing"
+          ls -la manifests/ || echo "manifests/ missing"
+          cat hiera.yaml || echo "hiera.yaml missing"
+
+      - name: Setup SSH key (both hosts)
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -H ${{ secrets.PUPPET_SERVER_HOST }} >> ~/.ssh/known_hosts || true
+          ssh-keyscan -H ${{ secrets.PUPPET_MASTER_HOST }} >> ~/.ssh/known_hosts || true
+          ssh-keyscan -H ${{ secrets.PUPPET_AGENT_HOST }} >> ~/.ssh/known_hosts || true
 
-      - name: Copy Hiera files + data to EC2 (temporary location)
+      - name: Copy files to Puppet Master (temporary)
         uses: appleboy/scp-action@v0.1.7
         with:
-          host: ${{ secrets.PUPPET_SERVER_HOST }}
-          username: ${{ secrets.PUPPET_SERVER_USER }}
+          host: ${{ secrets.PUPPET_MASTER_HOST }}
+          username: ${{ secrets.PUPPET_MASTER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
-          debug: true                     # keep for now – shows more
-          source: "."                     # ← copy everything in repo root
+          debug: true
+          source: "."
           target: "/tmp/gh-puppet-deploy"
           strip_components: 0
           rm: false
 
-      - name: Debug — check copied files on remote
+      - name: Deploy Hiera data + secrets to Puppet Master
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.PUPPET_SERVER_HOST }}
-          username: ${{ secrets.PUPPET_SERVER_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: ls -laR /tmp/gh-puppet-deploy
-    
-      - name: Move files to Puppet locations + inject secrets + run agent
-        uses: appleboy/ssh-action@v1.0.3   # your original version – still fine
-        with:
-          host: ${{ secrets.PUPPET_SERVER_HOST }}
-          username: ${{ secrets.PUPPET_SERVER_USER }}
+          host: ${{ secrets.PUPPET_MASTER_HOST }}
+          username: ${{ secrets.PUPPET_MASTER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             set -euo pipefail
-
-            # Define Puppet environment path (adjust if your setup uses a different path)
             PUPPET_ENV="/etc/puppetlabs/code/environments/production"
 
             sudo mkdir -p "$PUPPET_ENV"/{data,secrets,manifests}
 
-            # Move / copy hiera.yaml to standard locations (try both common paths)
+            # Copy hiera.yaml
             sudo cp /tmp/gh-puppet-deploy/hiera.yaml /etc/puppetlabs/puppet/hiera.yaml 2>/dev/null || \
-            sudo cp /tmp/gh-puppet-deploy/hiera.yaml "$PUPPET_ENV/hiera.yaml"
+              sudo cp /tmp/gh-puppet-deploy/hiera.yaml "$PUPPET_ENV/hiera.yaml"
 
-            # Sync data directory
-            sudo rsync -av --delete \
-              /tmp/gh-puppet-deploy/data/ \
-              "$PUPPET_ENV/data/"
+            # Sync data and manifests
+            sudo rsync -av --delete /tmp/gh-puppet-deploy/data/ "$PUPPET_ENV/data/"
+            sudo rsync -av --delete /tmp/gh-puppet-deploy/manifests/ "$PUPPET_ENV/manifests/" || true
 
-            # Sync manifests (optional)
-            sudo rsync -av --delete \
-              /tmp/gh-puppet-deploy/manifests/ \
-              "$PUPPET_ENV/manifests/" || true
-
-            # Inject Dynatrace secrets (overrides any placeholder in repo)
+            # Inject Dynatrace secrets (on master)
             sudo mkdir -p "$PUPPET_ENV/data/secrets"
             cat << EOF | sudo tee "$PUPPET_ENV/data/secrets/dynatrace.yaml"
             dynatraceoneagent::tenant_url: '${{ secrets.DYNATRACE_TENANT_URL }}'
             dynatraceoneagent::paas_token: '${{ secrets.DYNATRACE_PAAS_TOKEN }}'
             EOF
 
-            # Clean up temporary directory
             sudo rm -rf /tmp/gh-puppet-deploy
+            echo "Hiera data deployed to master"
 
-            # Trigger Puppet run
-            sudo puppet agent --test --verbose --environment production || echo "Puppet run finished with exit code \$?"
+      - name: Trigger Puppet agent run on Agent node
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.PUPPET_AGENT_HOST }}
+          username: ${{ secrets.PUPPET_AGENT_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -euo pipefail
+
+            # Ensure full Puppet path
+            export PATH=/opt/puppetlabs/bin:$PATH
+
+            # Optional: ensure correct server is set
+            sudo /opt/puppetlabs/bin/puppet config set server ${{ secrets.PUPPET_MASTER_HOST }} --section main
+
+            # Run agent
+            sudo /opt/puppetlabs/bin/puppet agent --test --verbose --environment production --waitforcert 60 || echo "Puppet agent exit code: \$?"
