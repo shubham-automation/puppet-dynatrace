@@ -1,76 +1,136 @@
-name: Deploy Dynatrace Master-Agent
+# name: Deploy Dynatrace Master-Agent
+
+# on:
+#   push:
+#     branches: [ main ]
+
+# jobs:
+#   deploy:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: actions/checkout@v4
+  
+#       - name: Install SSH Key
+#         uses: shimataro/ssh-key-action@v2
+#         with:
+#           key: ${{ secrets.SSH_PRIVATE_KEY }}
+#           known_hosts: unnecessary
+
+#       - name: Add Known Hosts
+#         run: |
+#           ssh-keyscan -H ${{ secrets.PUPPET_SERVER_HOST }} >> ~/.ssh/known_hosts
+#           ssh-keyscan -H ${{ secrets.PUPPET_AGENT_HOST }} >> ~/.ssh/known_hosts
+
+#       - name: Update Master and Trigger Agent
+#         uses: appleboy/ssh-action@v1.0.3
+#         with:
+#           host: ${{ secrets.PUPPET_SERVER_HOST }}
+#           username: ${{ secrets.PUPPET_SERVER_USER }}
+#           key: ${{ secrets.SSH_PRIVATE_KEY }}
+#           script: |
+#             # Attempt to install deprecated module (still works for now, but deprecated/archived since 2024)
+#             sudo puppet module install dynatrace-dynatraceoneagent --ignore-dependencies || echo "Module install failed; consider switching to direct installer script"
+
+#             # Ensure the manifests directory exists (critical fix)
+#             sudo mkdir -p /etc/puppetlabs/code/environments/production/manifests
+
+#             # Update (or overwrite) site.pp with the Dynatrace class for your agent node
+#             # IMPORTANT: Replace '<agent-host>' with the ACTUAL certname/hostname of your agent
+#             # (run `facter fqdn` or `hostname -f` on the agent to get it; Puppet is case-sensitive)
+#             sudo bash -c 'cat <<EOF > /etc/puppetlabs/code/environments/production/manifests/site.pp
+#             node '\''<agent-host>'' {   # <-- CHANGE THIS to your agent's real hostname, e.g., ip-172-31-45-67.ec2.internal or puppetagent.mydomain.com
+#               class { '\''dynatraceoneagent'\'': 
+#                 tenant_url => \"${{ secrets.DYNATRACE_TENANT_URL }}\",
+#                 paas_token => \"${{ secrets.DYNATRACE_PAAS_TOKEN }}\",
+#                 verify_signature => true,
+#                 version      => '1.281.247.20240206-142342'
+#                 oneagent_params_hash => {
+#                   '\''--set-infra-only'\''      => '\''false'\'',
+#                   '\''--set-app-log-content-access'\'' => '\''true'\'',
+#                 },
+#                 reboot_system => true,
+#               }
+#             }
+
+#             # Optional: default node for anything unmatched (good practice)
+#             node default {
+#               notify { '\''No specific config for this node'\'' : }
+#             }
+#             EOF'
+
+#             # Optional: Fix permissions if needed (Puppet server runs as root/pe-puppet)
+#             sudo chown -R root:root /etc/puppetlabs/code/environments/production/manifests
+#             sudo chmod 644 /etc/puppetlabs/code/environments/production/manifests/site.pp
+
+#       - name: Run Agent Pull
+#         uses: appleboy/ssh-action@v1.0.3
+#         with:
+#           host: ${{ secrets.PUPPET_AGENT_HOST }}
+#           username: ${{ secrets.PUPPET_AGENT_USER }}
+#           key: ${{ secrets.SSH_PRIVATE_KEY }}
+#           script: |
+#             # Use full path to puppet binary (standard for Puppet 8 on Linux/EC2)
+#             sudo /opt/puppetlabs/bin/puppet agent -t --verbose || echo "Puppet run failed; check logs"
+            
+#             # Optional: Also run with --noop first for dry-run testing (remove --noop later)
+#             # sudo /opt/puppetlabs/bin/puppet agent -t --noop --verbose
+
+
+
+name: Deploy Dynatrace OneAgent via Puppet (Hiera in repo)
 
 on:
+  workflow_dispatch:
   push:
     branches: [ main ]
+    paths:
+      - 'hiera.yaml'
+      - 'data/**'
+      - 'manifests/**'
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
-  
-      - name: Install SSH Key
-        uses: shimataro/ssh-key-action@v2
-        with:
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          known_hosts: unnecessary
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Add Known Hosts
+      - name: Setup SSH for EC2
         run: |
-          ssh-keyscan -H ${{ secrets.PUPPET_SERVER_HOST }} >> ~/.ssh/known_hosts
-          ssh-keyscan -H ${{ secrets.PUPPET_AGENT_HOST }} >> ~/.ssh/known_hosts
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H ${{ secrets.EC2_PUBLIC_DNS }} >> ~/.ssh/known_hosts || true
 
-      - name: Update Master and Trigger Agent
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.PUPPET_SERVER_HOST }}
-          username: ${{ secrets.PUPPET_SERVER_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            # Attempt to install deprecated module (still works for now, but deprecated/archived since 2024)
-            sudo puppet module install dynatrace-dynatraceoneagent --ignore-dependencies || echo "Module install failed; consider switching to direct installer script"
-
-            # Ensure the manifests directory exists (critical fix)
-            sudo mkdir -p /etc/puppetlabs/code/environments/production/manifests
-
-            # Update (or overwrite) site.pp with the Dynatrace class for your agent node
-            # IMPORTANT: Replace '<agent-host>' with the ACTUAL certname/hostname of your agent
-            # (run `facter fqdn` or `hostname -f` on the agent to get it; Puppet is case-sensitive)
-            sudo bash -c 'cat <<EOF > /etc/puppetlabs/code/environments/production/manifests/site.pp
-            node '\''<agent-host>'' {   # <-- CHANGE THIS to your agent's real hostname, e.g., ip-172-31-45-67.ec2.internal or puppetagent.mydomain.com
-              class { '\''dynatraceoneagent'\'': 
-                tenant_url => \"${{ secrets.DYNATRACE_TENANT_URL }}\",
-                paas_token => \"${{ secrets.DYNATRACE_PAAS_TOKEN }}\",
-                verify_signature => true,
-                version      => '1.281.247.20240206-142342'
-                oneagent_params_hash => {
-                  '\''--set-infra-only'\''      => '\''false'\'',
-                  '\''--set-app-log-content-access'\'' => '\''true'\'',
-                },
-                reboot_system => true,
-              }
-            }
-
-            # Optional: default node for anything unmatched (good practice)
-            node default {
-              notify { '\''No specific config for this node'\'' : }
-            }
-            EOF'
-
-            # Optional: Fix permissions if needed (Puppet server runs as root/pe-puppet)
-            sudo chown -R root:root /etc/puppetlabs/code/environments/production/manifests
-            sudo chmod 644 /etc/puppetlabs/code/environments/production/manifests/site.pp
-
-      - name: Run Agent Pull
+      - name: Deploy Hiera + trigger Puppet on EC2
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.PUPPET_AGENT_HOST }}
-          username: ${{ secrets.PUPPET_AGENT_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          username: ${{ secrets.PUPPET_AGENT_USER }}          # e.g. ec2-user, ubuntu
+          key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
           script: |
-            # Use full path to puppet binary (standard for Puppet 8 on Linux/EC2)
-            sudo /opt/puppetlabs/bin/puppet agent -t --verbose || echo "Puppet run failed; check logs"
-            
-            # Optional: Also run with --noop first for dry-run testing (remove --noop later)
-            # sudo /opt/puppetlabs/bin/puppet agent -t --noop --verbose
+            set -euo pipefail
+
+            # Prepare Puppet directories (adjust paths if your setup differs)
+            sudo mkdir -p /etc/puppetlabs/code/environments/production/{data,secrets,manifests}
+
+            # Copy hiera.yaml
+            sudo cp ./hiera.yaml /etc/puppetlabs/puppet/hiera.yaml || \
+            sudo cp ./hiera.yaml /etc/puppetlabs/code/environments/production/hiera.yaml
+
+            # Copy non-secret data
+            sudo rsync -av --delete ./data/ /etc/puppetlabs/code/environments/production/data/
+
+            # Inject secret token (recommended – overrides any placeholder)
+            sudo mkdir -p /etc/puppetlabs/code/environments/production/data/secrets
+            cat << EOF | sudo tee /etc/puppetlabs/code/environments/production/data/secrets/dynatrace.yaml
+            dynatraceoneagent::tenant_url: '${{ secrets.DYNATRACE_TENANT_URL }}'
+            dynatraceoneagent::paas_token: '${{ secrets.DYNATRACE_PAAS_TOKEN }}'
+            EOF
+
+            # Optional: copy site.pp if needed
+            sudo cp -f ./manifests/site.pp /etc/puppetlabs/code/environments/production/manifests/ || true
+
+            # Run Puppet agent
+            sudo puppet agent --test --verbose || echo "Puppet run exit code: \$?"
