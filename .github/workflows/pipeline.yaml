@@ -43,6 +43,7 @@ jobs:
                 tenant_url => \"${{ secrets.DYNATRACE_TENANT_URL }}\",
                 paas_token => \"${{ secrets.DYNATRACE_PAAS_TOKEN }}\",
                 verify_signature => true,
+                version      => '1.281.247.20240206-142342'
                 oneagent_params_hash => {
                   '\''--set-infra-only'\''      => '\''false'\'',
                   '\''--set-app-log-content-access'\'' => '\''true'\'',
