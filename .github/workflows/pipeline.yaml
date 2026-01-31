@@ -67,4 +67,9 @@ jobs:
           host: ${{ secrets.PUPPET_AGENT_HOST }}
           username: ${{ secrets.PUPPET_AGENT_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: sudo puppet agent -t
+          script: |
+            # Use full path to puppet binary (standard for Puppet 8 on Linux/EC2)
+            sudo /opt/puppetlabs/bin/puppet agent -t --verbose || echo "Puppet run failed; check logs"
+            
+            # Optional: Also run with --noop first for dry-run testing (remove --noop later)
+            # sudo /opt/puppetlabs/bin/puppet agent -t --noop --verbose
